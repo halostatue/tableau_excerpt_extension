@@ -146,12 +146,19 @@ defmodule TableauExcerptExtension do
   defp extract_fallback(body, %{strategy: :sentence, count: count}) do
     paragraph = take_paragraphs(body, 1)
 
-    ~r/(?<=[.!?‽]\p{Pf}?)\s+(?=[A-Z])/u
-    |> Regex.split(paragraph)
-    |> Enum.take(count)
-    |> Enum.join(" ")
-    |> String.trim()
-    |> clean_excerpt(body)
+    sentences =
+      paragraph
+      |> String.split(~r/([.!?‽]["']?)\s+/, include_captures: true, trim: true)
+      |> Enum.chunk_every(2)
+      |> Enum.map(fn
+        [sentence, punct] -> sentence <> punct
+        [sentence] -> sentence
+      end)
+      |> Enum.take(count)
+      |> Enum.join(" ")
+      |> String.trim()
+
+    clean_excerpt(sentences, body)
   end
 
   defp extract_fallback(body, %{strategy: :word, count: count, more: more}) do
