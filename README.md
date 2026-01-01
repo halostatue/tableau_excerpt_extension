@@ -91,4 +91,4 @@ TableauExcerptExtension follows [Semantic Versioning 2.0][semver].
 
 [12f]: https://12factor.net/
 [docs]: https://hexdocs.pm/tableau_excerpt_extension
-[semver]: http://semver.org/
+[semver]: https://semver.org/
