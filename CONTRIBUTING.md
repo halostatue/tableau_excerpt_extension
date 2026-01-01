@@ -54,7 +54,7 @@ output will be rejected.
 > generated deeply inefficient and non-idiomatic code. This is _not_ something
 > dashed off in a weekend.
 
-### Commit Conventions
+## Commit Conventions
 
 TableauExcerptExtension has adopted a variation of the Conventional Commits
 format for commit messages. The following types are permitted:
@@ -100,9 +100,9 @@ Austin Ziegler created TableauExcerptExtension.
 [credo]: https://github.com/rrrene/credo
 [dco]: licences/dco.txt
 [exunit]: https://hexdocs.pm/ex_unit/ExUnit.html
-[issues]: https://github.com/halostatue/capture_logger/issues
+[issues]: https://github.com/halostatue/tableau_excerpt_extension/issues
 [quokka]: https://github.com/emkguts/quokka
-[tpope-qcm]: http://tbaggery.com/2008/04/19/a-note-about-git-commit-messages.html
+[tpope-qcm]: https://tbaggery.com/2008/04/19/a-note-about-git-commit-messages.html
 [trailers1]: https://git-scm.com/docs/git-interpret-trailers
 [trailers2]: https://git-scm.com/docs/git-commit#Documentation/git-commit.txt---trailerlttokengtltvaluegt
 [kiro]: https://kiro.dev
