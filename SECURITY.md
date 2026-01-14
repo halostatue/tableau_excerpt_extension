@@ -25,16 +25,7 @@ after the release of a new version of Elixir.
 
 ## Reporting a Vulnerability
 
-Prefer creating a [private vulnerability report][advisory] with GitHub.
-Alternatively, send an email to [security@elixir.halostatue.ca][email] with the
-text `TableauExcerptExtension` in the subject. Emails sent to this address
-should be encrypted using [age][age] with the following public key:
+Create a [private vulnerability report][advisory] with GitHub.
 
-```
-age1fc6ngxmn02m62fej5cl30lrvwmxn4k3q2atqu53aatekmnqfwumqj4g93w
-```
-
-[age]: https://github.com/FiloSottile/age
-[email]: mailto:security@elixir.halostatue.ca
 [advisory]: https://github.com/halostatue/tableau_excerpt_extension/security/advisories/new
 [otp-versions]: https://hexdocs.pm/elixir/compatibility-and-deprecations.html#between-elixir-and-erlang-otp
