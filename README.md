@@ -1,9 +1,13 @@
 # TableauExcerptExtension
 
+[![Hex.pm][shield-hex]][hexpm] [![Hex Docs][shield-docs]][docs]
+[![Apache 2.0][shield-licence]][licence] ![Coveralls][shield-coveralls]
+
 - code :: <https://github.com/halostatue/tableau_excerpt_extension>
 - issues :: <https://github.com/halostatue/tableau_excerpt_extension/issues>
 
-A Tableau extension that automatically extracts excerpts from posts.
+A [Tableau][tableau] extension that automatically extracts excerpts from
+[posts][posts].
 
 ## Overview
 
@@ -89,6 +93,13 @@ Documentation is found on [HexDocs][docs].
 
 TableauExcerptExtension follows [Semantic Versioning 2.0][semver].
 
-[12f]: https://12factor.net/
 [docs]: https://hexdocs.pm/tableau_excerpt_extension
+[hexpm]: https://hex.pm/packages/tableau_excerpt_extension
+[licence]: https://github.com/halostatue/tableau_excerpt_extension/blob/main/LICENCE.md
+[posts]: https://hexdocs.pm/tableau/Tableau.PostExtension.html
 [semver]: https://semver.org/
+[shield-coveralls]: https://img.shields.io/coverallsCoverage/github/halostatue/tableau_excerpt_extension?style=for-the-badge
+[shield-docs]: https://img.shields.io/badge/hex-docs-lightgreen.svg?style=for-the-badge "Hex Docs"
+[shield-hex]: https://img.shields.io/hexpm/v/tableau_excerpt_extension?style=for-the-badge "Hex Version"
+[shield-licence]: https://img.shields.io/hexpm/l/tableau_excerpt_extension?style=for-the-badge&label=licence "Apache 2.0"
+[tableau]: https://hex.pm/packages/tableau
