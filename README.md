@@ -9,13 +9,16 @@
 A [Tableau][tableau] extension that automatically extracts excerpts from
 [posts][posts].
 
+<!-- more -->
+
 ## Overview
 
 The excerpt extension processes your Tableau markdown posts and extracts an
 excerpt for use in post index pages.
 
-If a post already has an `excerpt` field, it is unmodified. Otherwise, the
-content up to `<!--more-->` or the first paragraph is chosen.
+If a post already has an `excerpt` field, it is unmodified. Otherwise, if the
+content contains `<!--more-->`, the excerpt is the content before it. If no
+marker is found, the first paragraph is chosen.
 
 TableauExcerptExtension is markdown-aware and will convert reference links
 (`[link][ref]`) to inline links (`[link](uri)`) and remove footnotes (`[^1]`).
