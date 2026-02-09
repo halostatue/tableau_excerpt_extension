@@ -1,22 +1,29 @@
 defmodule TableauExcerptExtension do
   @moduledoc """
-  Tableau extension to extracts excerpts from posts.
+  Tableau extension to extract excerpts from posts.
 
   ## Extraction Rules
 
   1. If the post frontmatter already has an `:excerpt` field, it is preserved unchanged;
-  2. If the content contains the excerpt marker (default `<!--more-->`), extract
+  2. If the content contains range markers (default `<!--excerpt:start-->` and
+     `<!--excerpt:end-->`), extract the content between them;
+  3. If the content contains the split marker (default `<!--more-->`), extract
      everything before it;
-  3. Otherwise, use the configured fallback strategy to extract content.
+  4. Otherwise, use structural extraction to extract content based on text structure.
 
   The post frontmatter is updated to add an `:excerpt` field and the post body may be
-  updated to remove the excerpt marker (depending on configuration).
+  updated to remove the split marker (depending on configuration). Range markers are not
+  removed from the body.
 
   ## Configuration
 
   ```elixir
   config :tableau, TableauExcerptExtension,
     enabled: true,
+    range: %{
+      start: "<!--\\s*excerpt:start\\s*-->",
+      end: "<!--\\s*excerpt:end\\s*-->"
+    },
     marker: %{
       pattern: "<!--\\s*more\\s*-->",
       remove: true
@@ -25,27 +32,38 @@ defmodule TableauExcerptExtension do
       count: 1,
       more: "…",
       strategy: :paragraph
-    }
+    },
+    processors: [
+      md: TableauExcerptExtension.Processor.Markdown
+    ]
   ```
 
   ### Configuration Options
 
   - `:enabled` (default `false`): Enable or disable the extension
 
-  - `:marker`: Excerpt marker configuration. Set to `false` to disable marker matching
+  - `:range`: Range marker configuration. Set to `false` to disable range extraction
+
+    - `:start` (default `"<!--\\s*excerpt:start\\s*-->"`): Pattern for the start marker
+    - `:end` (default `"<!--\\s*excerpt:end\\s*-->"`): Pattern for the end marker
+    - `:remove` (default `false`): Remove the markers from the post body (content between
+      markers is preserved)
+
+  - `:marker`: Split marker configuration. Set to `false` to disable marker matching
 
     - `:pattern` (default `"<!--\\s*more\\s*-->"`): A string converted into a Regex
-      pattern for excerpt marker matching
+      pattern for split marker matching
 
     - `:remove` (default `true`): Remove the marker from the post body
 
-  - `:fallback`: Excerpt fallback strategy. Set to `false` to disable fallback.
+  - `:fallback`: Structural extraction strategy when no markers are found. Set to `false`
+    to disable.
 
     - `:more` (default `…`): If using `:word` mode and the excerpt is truncated
       mid-sentence, this string will be appended
 
-    - `:count`: The count of paragraphs, sentences or words to extract; the default depends
-      on the strategy selected
+    - `:count`: The count of paragraphs, sentences or words to extract; the default
+      depends on the strategy selected
 
       | strategy  | default |
       | --------- | ------- |
@@ -60,30 +78,62 @@ defmodule TableauExcerptExtension do
       - `:word`: Extract _count_ words, stopping at the first paragraph boundary and
         appending the `more` string if mid-sentence
 
-  The definition of `word`, `sentence`, and `paragraph` is based on normal English usage
-  and full stop punctuation. The heuristics for sentence detection are simple.
+  - `:processors`: Map of file extensions (atoms) to processor modules. Processors handle
+    format-specific filtering and cleaning. The default is
+    `%{md: TableauExcerptExtension.Processor.Markdown}`; content without an explicit
+    processor will be passed to the Passthrough processor.
 
-  ## Markdown Processing
+  ## Format Processing
 
-  As the content of the excerpt is extracted from markdown content, it should be rendered
-  as markdown. Reference links (`[text][ref]`) are converted to inline links
-  (`[text](url)`) and footnotes (`[^1]`) are removed.
+  Excerpts are processed by format-specific processors based on the post's file extension.
+  Processors implement the `TableauExcerptExtension.Processor` behaviour with two
+  callbacks:
+
+  - `filter_paragraphs/1`: Filters paragraph-like blocks (e.g., remove headings/rules).
+    This is only called when using the `fallback` structural extraction.
+  - `clean/2`: Cleans format-specific syntax from excerpts (e.g., footnotes, reference
+    links). This is called for all extracted excerpts (excerpts already present in
+    post frontmatter are ignored).
+
+  ### Built-in Processors
+
+  - `TableauExcerptExtension.Processor.Markdown`: Filters headings/rules, cleans footnotes
+    and reference links
+  - `TableauExcerptExtension.Processor.Passthrough`: Passthrough processor for unknown
+    formats
+
+  ### Custom Processors
+
+  To support additional formats, implement the `TableauExcerptExtension.Processor`
+  behaviour and add to the `:processors` config:
+
+  ```elixir
+  config :tableau, TableauExcerptExtension,
+    processors: %{
+      md: TableauExcerptExtension.Processor.Markdown,
+      djot: MySite.DjotProcessor
+    }
+  ```
   """
 
   use Tableau.Extension, key: :excerpt, priority: 140
+
+  alias TableauExcerptExtension.Processor.Markdown
+  alias TableauExcerptExtension.Processor.Passthrough
 
   require Logger
 
   @defaults %{
     enabled: false,
-    marker: %{
-      pattern: "<!--\\s*more\\s*-->",
-      remove: true
+    marker: %{pattern: "<!--\\s*more\\s*-->", remove: true},
+    range: %{
+      start: "<!--\\s*excerpt:start\\s*-->",
+      end: "<!--\\s*excerpt:end\\s*-->",
+      remove: false
     },
-    fallback: %{
-      count: nil,
-      more: "…",
-      strategy: :paragraph
+    fallback: %{count: nil, more: "…", strategy: :paragraph},
+    processors: %{
+      md: Markdown
     }
   }
 
@@ -108,43 +158,82 @@ defmodule TableauExcerptExtension do
   defp put_new_excerpt(%{excerpt: _} = post, _config), do: post
 
   defp put_new_excerpt(post, config) do
-    case extract_excerpt(post.body, config) do
+    processor = get_processor(post.file, config.processors)
+
+    case extract_excerpt(post.body, config, processor) do
       nil -> post
       excerpt when is_binary(excerpt) -> Map.put(post, :excerpt, excerpt)
       {excerpt, body} -> Map.merge(post, %{excerpt: excerpt, body: body})
     end
   end
 
-  defp extract_excerpt(body, config) do
-    case extract_marker(body, config.marker) do
-      {nil, body} -> extract_fallback(body, config.fallback)
-      {excerpt, body} -> {excerpt, body}
-      nil -> extract_fallback(body, config.fallback)
+  defp get_processor(filename, processors) do
+    "." <> ext = Path.extname(filename)
+    # credo:disable-for-next-line
+    ext_atom = String.to_atom(ext)
+
+    Map.get(processors, ext_atom, Passthrough)
+  end
+
+  defp extract_excerpt(body, config, processor) do
+    case extract_range(body, config.range, processor) do
+      {excerpt, body} ->
+        {excerpt, body}
+
+      nil ->
+        case extract_marker(body, config.marker, processor) do
+          {nil, body} -> extract_fallback(body, config.fallback, processor)
+          {excerpt, body} -> {excerpt, body}
+          nil -> extract_fallback(body, config.fallback, processor)
+        end
     end
   end
 
-  defp extract_marker(_body, false), do: nil
+  defp extract_range(_body, false, _processor), do: nil
 
-  defp extract_marker(body, config) do
+  defp extract_range(body, config, processor) do
+    pattern = Regex.compile!("#{config.start}(.*?)#{config.end}", "s")
+
+    case Regex.run(pattern, body) do
+      [_full, excerpt] ->
+        cleaned_body =
+          if config.remove do
+            body
+            |> String.replace(config.start_pattern, "", global: false)
+            |> String.replace(config.end_pattern, "", global: false)
+          else
+            body
+          end
+
+        {processor.clean(excerpt, cleaned_body), cleaned_body}
+
+      nil ->
+        nil
+    end
+  end
+
+  defp extract_marker(_body, false, _processor), do: nil
+
+  defp extract_marker(body, config, processor) do
     case Regex.split(config.pattern, body, parts: 2) do
       [excerpt, _] ->
-        {clean_excerpt(excerpt, body), clean_body(body, config)}
+        {processor.clean(excerpt, body), clean_body(body, config)}
 
       _ ->
         nil
     end
   end
 
-  defp extract_fallback(_body, false), do: nil
+  defp extract_fallback(_body, false, _processor), do: nil
 
-  defp extract_fallback(body, %{strategy: :paragraph, count: count}) do
+  defp extract_fallback(body, %{strategy: :paragraph, count: count}, processor) do
     body
-    |> take_paragraphs(count)
-    |> clean_excerpt(body)
+    |> take_paragraphs(count, processor)
+    |> clean_excerpt(body, processor)
   end
 
-  defp extract_fallback(body, %{strategy: :sentence, count: count}) do
-    paragraph = take_paragraphs(body, 1)
+  defp extract_fallback(body, %{strategy: :sentence, count: count}, processor) do
+    paragraph = take_paragraphs(body, 1, processor)
 
     sentences =
       paragraph
@@ -158,12 +247,16 @@ defmodule TableauExcerptExtension do
       |> Enum.join(" ")
       |> String.trim()
 
-    clean_excerpt(sentences, body)
+    clean_excerpt(sentences, body, processor)
   end
 
-  defp extract_fallback(body, %{strategy: :word, count: count, more: more}) do
-    paragraph = take_paragraphs(body, 1)
-    words = String.split(paragraph, ~r/\s+/)
+  defp extract_fallback(body, %{strategy: :word, count: count, more: more}, processor) do
+    paragraph = take_paragraphs(body, 1, processor)
+
+    words =
+      paragraph
+      |> String.trim()
+      |> String.split(~r/\s+/)
 
     excerpt =
       if length(words) <= count do
@@ -181,20 +274,20 @@ defmodule TableauExcerptExtension do
         end
       end
 
-    clean_excerpt(excerpt, body)
+    clean_excerpt(excerpt, body, processor)
   end
 
-  defp clean_excerpt(excerpt, body) do
-    cleaned =
-      excerpt
-      |> strip_leading_headings()
-      |> strip_footnotes()
-      |> clean_reference_links(body)
+  defp take_paragraphs(body, count, processor) do
+    body
+    |> String.trim()
+    |> String.split(~r/\n\n+/)
+    |> processor.filter_paragraphs()
+    |> Enum.take(count)
+    |> Enum.join("\n\n")
+  end
 
-    case String.trim(cleaned) do
-      "" -> nil
-      _ -> cleaned
-    end
+  defp clean_excerpt(excerpt, body, processor) do
+    processor.clean(excerpt, body)
   end
 
   defp clean_body(body, %{remove: false}), do: body
@@ -203,59 +296,28 @@ defmodule TableauExcerptExtension do
     String.replace(body, pattern, "", global: false)
   end
 
-  defp strip_leading_headings(content) do
-    content
-    |> String.split(~r/\n\n+/)
-    |> Enum.drop_while(&heading_or_rule?/1)
-    |> Enum.join("\n\n")
-    |> String.trim()
-  end
-
-  defp heading_or_rule?(block) do
-    trimmed = String.trim_leading(block)
-    Regex.match?(~r/\A(?:\#{1,6}\s|---+\s*$|\*\*\*+\s*$|___+\s*$)/m, trimmed)
-  end
-
-  defp paragraph?(block) do
-    not heading_or_rule?(block)
-  end
-
-  defp strip_footnotes(excerpt) do
-    excerpt
-    |> String.replace(~r/^\[\^[^\]]+\]:.*(?:\n(?:[ \t]+.*)?)*/m, "")
-    |> String.replace(~r/\[\^[^\]]+\]/, "")
-    |> String.replace(~r/  +/, " ")
-    |> String.replace(~r/\n{3,}/, "\n\n")
-    |> String.trim()
-  end
-
-  defp clean_reference_links(excerpt, content) do
-    refs = parse_reference_definitions(content)
-
-    Regex.replace(~r/\[([^\]]+)\]\[([^\]]*)\]/, excerpt, fn _full_match, text, ref ->
-      key = String.downcase(if ref == "", do: text, else: ref)
-
-      case Map.get(refs, key) do
-        {url, title} -> "[#{text}](#{url} \"#{title}\")"
-        url when is_binary(url) -> "[#{text}](#{url})"
-        nil -> text
-      end
-    end)
-  end
-
-  defp parse_reference_definitions(content) do
-    ~r/^\[([^\]]+)\]:\s*<?([^\s>]+)>?(?:\s+["'(]([^"')]+)["')])?$/m
-    |> Regex.scan(content)
-    |> Map.new(fn
-      [_, ref, url] -> {String.downcase(ref), url}
-      [_, ref, url, title] -> {String.downcase(ref), {url, title}}
-    end)
-  end
-
   defp resolve_config(config) do
-    with {:ok, config} <- resolve_marker_config(config),
+    with {:ok, config} <- resolve_range_config(config),
+         {:ok, config} <- resolve_marker_config(config),
          {:ok, config} <- resolve_fallback_config(config) do
       finalize_config(config)
+    end
+  end
+
+  defp resolve_range_config(%{range: false} = config), do: {:ok, config}
+
+  defp resolve_range_config(%{range: %{start: start_pattern, end: end_pattern}} = config) do
+    with {:ok, start_regex} <- Regex.compile(start_pattern),
+         {:ok, end_regex} <- Regex.compile(end_pattern) do
+      config =
+        config
+        |> put_in([:range, :start_pattern], start_regex)
+        |> put_in([:range, :end_pattern], end_regex)
+
+      {:ok, config}
+    else
+      {:error, _} ->
+        {:error, "range.start and range.end must be valid regular expressions"}
     end
   end
 
@@ -288,20 +350,10 @@ defmodule TableauExcerptExtension do
     end
   end
 
-  defp finalize_config(%{marker: false, fallback: false} = config) do
-    Logger.warning("[TableauExcerptExtension] Disabling because both marker and fallback
-      are disabled")
+  defp finalize_config(%{marker: false, fallback: false, range: false} = config) do
+    Logger.warning("[TableauExcerptExtension] Disabled because no extraction method is enabled")
     {:ok, %{config | enabled: false}}
   end
 
   defp finalize_config(config), do: {:ok, config}
-
-  defp take_paragraphs(text, count) do
-    text
-    |> String.split(~r/\n\n+/)
-    |> Enum.filter(&paragraph?/1)
-    |> Enum.take(count)
-    |> Enum.join("\n\n")
-    |> String.trim()
-  end
 end

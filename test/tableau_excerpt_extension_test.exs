@@ -26,6 +26,90 @@ defmodule TableauExcerptExtensionTest do
       assert excerpt == nil
     end
 
+    test "extracts content between range markers" do
+      body = """
+      First paragraph.
+
+      <!--excerpt:start-->
+      This is the excerpt content.
+
+      It can span multiple paragraphs.
+      <!--excerpt:end-->
+
+      More content after the range.
+      """
+
+      excerpt = process_page(body)
+      assert excerpt == "This is the excerpt content.\n\nIt can span multiple paragraphs."
+    end
+
+    test "range markers take precedence over split marker" do
+      body = """
+      First paragraph.
+
+      <!--excerpt:start-->
+      Range excerpt content.
+      <!--excerpt:end-->
+
+      <!--more-->
+
+      Content after more marker.
+      """
+
+      excerpt = process_page(body)
+      assert excerpt == "Range excerpt content."
+    end
+
+    test "range markers can include headings" do
+      body = """
+      First paragraph.
+
+      <!--excerpt:start-->
+      # Heading in excerpt
+
+      Content under heading.
+      <!--excerpt:end-->
+
+      More content.
+      """
+
+      excerpt = process_page(body)
+      assert excerpt == "# Heading in excerpt\n\nContent under heading."
+    end
+
+    test "custom range markers" do
+      body = """
+      First paragraph.
+
+      [excerpt-begin]
+      Custom range excerpt.
+      [excerpt-finish]
+
+      More content.
+      """
+
+      excerpt = process_page(body, range: %{start: "\\[excerpt-begin\\]", end: "\\[excerpt-finish\\]"})
+      assert excerpt == "Custom range excerpt."
+    end
+
+    test "range markers can be removed from body" do
+      body = """
+      First paragraph.
+
+      <!--excerpt:start-->
+      Range excerpt.
+      <!--excerpt:end-->
+
+      More content.
+      """
+
+      result = process_page(body, range: %{remove: true}, parse: false)
+      assert {:ok, %{posts: [%{body: updated_body}]}} = result
+      refute updated_body =~ "<!--excerpt:start-->"
+      refute updated_body =~ "<!--excerpt:end-->"
+      assert updated_body =~ "Range excerpt."
+    end
+
     test "processes page with custom marker configuration" do
       body = """
       First paragraph content.
@@ -285,7 +369,7 @@ defmodule TableauExcerptExtensionTest do
       """
 
       excerpt = process_page(body)
-      assert excerpt == "First paragraph content."
+      assert excerpt == "# Heading\n\n## Another heading\n\nFirst paragraph content."
     end
 
     test "strips horizontal rules from excerpt" do
@@ -304,7 +388,7 @@ defmodule TableauExcerptExtensionTest do
       """
 
       excerpt = process_page(body)
-      assert excerpt == "First paragraph content."
+      assert excerpt == "---\n\n***\n\n___\n\nFirst paragraph content."
     end
 
     test "handles word truncation ending with terminal punctuation" do
@@ -319,10 +403,10 @@ defmodule TableauExcerptExtensionTest do
     end
 
     test "falls back when marker excerpt is empty after cleaning" do
-      # Test case where marker extraction returns {nil, body} because
-      # the excerpt before the marker is empty after cleaning
+      # Test case where marker extraction returns nil because
+      # the excerpt before the marker is empty after cleaning (e.g., only whitespace)
       body = """
-      # Just a heading
+
 
       <!--more-->
 
@@ -360,6 +444,40 @@ defmodule TableauExcerptExtensionTest do
       # Configure marker to be disabled, fallback enabled
       excerpt = process_page(body, marker: false)
       assert excerpt == "This is the first paragraph that should be excerpted."
+    end
+
+    test "handles case where range is disabled" do
+      body = """
+      First paragraph.
+
+      <!--excerpt:start-->
+      Range content.
+      <!--excerpt:end-->
+
+      <!--more-->
+
+      After marker.
+      """
+
+      excerpt = process_page(body, range: false)
+      assert excerpt == "First paragraph.\n\n<!--excerpt:start-->\nRange content.\n<!--excerpt:end-->"
+    end
+
+    test "handles case where range and marker are disabled" do
+      body = """
+      First paragraph.
+
+      <!--excerpt:start-->
+      Range content.
+      <!--excerpt:end-->
+
+      <!--more-->
+
+      After marker.
+      """
+
+      excerpt = process_page(body, range: false, marker: false)
+      assert excerpt == "First paragraph."
     end
 
     test "handles word fallback when paragraph has fewer words than count" do

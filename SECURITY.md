@@ -10,10 +10,10 @@ agents.
 Security reports are accepted for the most recent major release with support for
 the previous major version ending immediately.
 
-Mnemonist supports at most the three most recent versions of Elixir and
-supported [Erlang/OTP versions][otp-versions].
+TableauExcerptExtensions supports at most the three most recent versions of
+Elixir and supported [Erlang/OTP versions][otp-versions].
 
-As of December 2025, the support list is:
+As of February 2026, the support list is:
 
 | Elixir | Erlang         |
 | ------ | -------------- |

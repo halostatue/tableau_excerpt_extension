@@ -2,8 +2,8 @@
 
 - SPDX-License-Identifier: [Apache-2.0][apache-2]
 
-`TableauExcerptExtension` is copyright 2025 Austin Ziegler and is licensed under
-the [Apache License, version 2.0](licences/APACHE-2.0.txt).
+`TableauExcerptExtension` is copyright 2025–2026 Austin Ziegler and is licensed
+under the [Apache License, version 2.0](licences/APACHE-2.0.txt).
 
 ## Developer Certificate of Origin
 

@@ -3,6 +3,8 @@ defmodule ConfigTest do
 
   import ExUnit.CaptureLog
 
+  alias TableauExcerptExtension.Processor.Markdown
+
   describe "config/1" do
     test "accepts keyword list config" do
       assert {:ok, %{enabled: true}} = TableauExcerptExtension.config(enabled: true)
@@ -55,15 +57,52 @@ defmodule ConfigTest do
       assert config.fallback.count == 25
     end
 
+    test "validates range.start regex" do
+      assert {:error, "range.start and range.end must be valid regular expressions"} =
+               TableauExcerptExtension.config(%{range: %{start: "["}})
+    end
+
+    test "validates range.end regex" do
+      assert {:error, "range.start and range.end must be valid regular expressions"} =
+               TableauExcerptExtension.config(%{range: %{end: "["}})
+    end
+
+    test "compiles range patterns to regexes" do
+      {:ok, config} =
+        TableauExcerptExtension.config(%{range: %{start: "<!--\\s*start\\s*-->", end: "<!--\\s*end\\s*-->"}})
+
+      assert %Regex{} = config.range.start_pattern
+      assert %Regex{} = config.range.end_pattern
+    end
+
+    test "accepts processors as keyword list" do
+      {:ok, config} = TableauExcerptExtension.config(processors: [md: Markdown])
+      assert config.processors.md == Markdown
+    end
+
+    test "accepts processors as map" do
+      {:ok, config} = TableauExcerptExtension.config(%{processors: %{md: Markdown}})
+      assert config.processors.md == Markdown
+    end
+
     test "allows marker and fallback to be disabled" do
+      assert {:ok, %{marker: false, fallback: false}} =
+               TableauExcerptExtension.config(%{marker: false, fallback: false})
+    end
+
+    test "allows range to be disabled" do
+      assert {:ok, %{range: false}} =
+               TableauExcerptExtension.config(%{range: false})
+    end
+
+    test "disables extension when all extraction methods are disabled" do
       log =
         capture_log(fn ->
-          assert {:ok, %{enabled: false, fallback: false, marker: false}} =
-                   TableauExcerptExtension.config(%{marker: false, fallback: false})
+          assert {:ok, %{enabled: false, range: false, marker: false, fallback: false}} =
+                   TableauExcerptExtension.config(%{range: false, marker: false, fallback: false})
         end)
 
-      assert log =~ "[TableauExcerptExtension] Disabling because both marker and fallback"
-      assert log =~ "are disabled"
+      assert log =~ "[TableauExcerptExtension] Disabled because no extraction method is enabled"
     end
   end
 end
