@@ -45,6 +45,7 @@ defmodule TableauExcerptExtension.PageCase do
   defp build_page(body, opts) do
     page = %{
       body: body,
+      file: Keyword.get(opts, :file, "/test.md"),
       permalink: Keyword.get(opts, :permalink, "/test")
     }
 

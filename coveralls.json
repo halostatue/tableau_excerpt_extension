@@ -1,6 +1,7 @@
 {
   "skip_files": [
-    "test/support"
+    "test/support",
+    "lib/tableau_excerpt_extension/processor/passthrough.ex"
   ],
   "terminal_options": {
     "file_column_width": 60
