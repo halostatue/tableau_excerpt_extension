@@ -41,14 +41,9 @@ defmodule MySite.PostsPage do
     title: "All Posts"
 
   def template(assigns) do
-    posts =
-      assigns.site.pages
-      |> Enum.filter(& &1[:__tableau_post_extension__])
-      |> Enum.sort_by(& &1.date, {:desc, Date})
-
     temple do
       ul do
-        for post <- posts do
+        for post <- @posts do
           render_post_summary(post)
         end
       end
